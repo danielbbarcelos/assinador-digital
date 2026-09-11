@@ -614,14 +614,16 @@ def probe_timestamper(timestamper: timestamps.TimeStamper) -> None:
 
 
 #: Como o sistema operacional diz "não tem rede aqui".
+#:
+#: Só sinais inequívocos de DNS ou de rota. "Connection refused" ficou de fora
+#: de propósito: ela diz que a máquina chegou até o outro lado e levou não,
+#: o que é autoridade fora do ar, e não falta de internet.
 _OFFLINE_SIGNS = (
     "temporary failure in name resolution",
     "name or service not known",
     "nodename nor servname",
     "network is unreachable",
     "no route to host",
-    "cannot connect to host",
-    "connection refused",
     "getaddrinfo",
 )
 

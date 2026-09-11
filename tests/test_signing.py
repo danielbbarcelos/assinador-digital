@@ -338,15 +338,32 @@ def test_assina_paginas_rotacionadas(pfx_bytes, pfx_password, rotate):
 
 
 @pytest.mark.network
-def test_tsa_indisponivel_da_erro_de_tsa_e_nao_de_cadeia(pfx_bytes, pfx_password, pdf_bytes):
-    """TSA fora do ar não pode aparecer como problema de cadeia."""
-    with pytest.raises(errors.TimestampError) as exc:
+def test_nome_que_nao_resolve_e_falta_de_internet(pfx_bytes, pfx_password, pdf_bytes):
+    """DNS que não resolve é problema de conexão, e o app diz isso."""
+    with pytest.raises(errors.NoInternetError) as exc:
         _sign(
             pdf_bytes,
             pfx_bytes,
             pfx_password,
             timestamp=True,
             tsa_url="http://tsa-que-nao-existe.invalid/tsr",
+        )
+    assert exc.value.code == "NO_INTERNET"
+
+
+def test_autoridade_fora_do_ar_nao_e_falta_de_internet(pfx_bytes, pfx_password, pdf_bytes):
+    """Porta fechada é a autoridade que não atende, não a internet que caiu.
+
+    A distinção importa: uma pede para tentar de novo mais tarde, a outra pede
+    para olhar a conexão. Roda sem rede porque fala com a própria máquina.
+    """
+    with pytest.raises(errors.TimestampError) as exc:
+        _sign(
+            pdf_bytes,
+            pfx_bytes,
+            pfx_password,
+            timestamp=True,
+            tsa_url="http://127.0.0.1:9/tsr",  # porta 9: fechada por convenção
         )
     assert exc.value.code == "TSA_UNAVAILABLE"
 
