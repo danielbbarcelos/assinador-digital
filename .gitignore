@@ -1,0 +1,42 @@
+# Node / Tauri
+node_modules/
+dist/
+.vite/
+src-tauri/target/
+src-tauri/gen/
+
+# Python (sidecar)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+*.egg-info/
+*.spec.bak
+
+# Material sensível — NUNCA versionar
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt.key
+.env
+.env.*
+!.env.example
+
+# Documentos de teste assinados
+samples/private/
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Cadeia da ICP-Brasil baixada pelo usuário (pública, mas não versionada)
+certs/*
+!certs/.gitkeep
+
+# Material de trabalho das gravações e testes manuais
+.tmp-ui/
+.playwright-mcp/

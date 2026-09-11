@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assinador</title>
+    <link rel="icon" href="/static/icon.png" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app" data-view="sign">
+      <!-- ─── barra superior ─── -->
+      <header class="topbar">
+        <div class="brand">
+          <img src="/static/icon.png" alt="" class="brand__mark" />
+          <span class="brand__name">Assinador</span>
+        </div>
+
+        <nav class="tabs" aria-label="Seções">
+          <button type="button" class="tab" data-goto="sign" aria-current="true">Assinar</button>
+          <button type="button" class="tab" data-goto="certs">Certificados</button>
+          <button type="button" class="tab" data-goto="validate">Validar</button>
+        </nav>
+
+        <div class="docbar" id="docbar" hidden>
+          <span class="docbar__name" id="pdf-name"></span>
+          <span class="docbar__pages"><b id="page-num">1</b>/<span id="page-total">1</span></span>
+          <button type="button" id="change-pdf" class="quiet-btn">Trocar</button>
+        </div>
+
+        <div class="topbar__right">
+          <div class="zoom" id="zoom" hidden>
+            <button type="button" id="zoom-out" class="icon-btn" title="Diminuir" aria-label="Diminuir">−</button>
+            <span id="zoom-level">ajustar</span>
+            <button type="button" id="zoom-in" class="icon-btn" title="Aumentar" aria-label="Aumentar">+</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- ════════ ASSINAR ════════ -->
+      <nav class="pages" id="pages" hidden aria-label="Páginas do documento">
+        <ol class="pages__list" id="pages-list"></ol>
+      </nav>
+
+      <main class="desk" id="desk">
+        <div class="welcome" id="dropzone">
+          <img src="/static/icon.png" alt="" class="welcome__mark" />
+          <h1 class="welcome__title">Assine um PDF</h1>
+          <p class="welcome__lead">
+            Com seu certificado, aqui mesmo. O documento não sai desta máquina.
+          </p>
+          <button type="button" class="seal-btn" id="pick-pdf">Escolher documento</button>
+        </div>
+
+        <div class="stage" id="stage" hidden>
+          <div class="sheet" id="canvas-wrap">
+            <canvas id="page-canvas"></canvas>
+            <!-- a marca tem tamanho fixo: só se posiciona -->
+            <div class="mark" id="selection" hidden>
+              <div class="mark__paper">
+                <div class="mark__text">
+                  <span class="mark__line mark__line--label">Assinado digitalmente por</span>
+                  <span class="mark__line mark__line--name" id="mark-name">seu nome</span>
+                  <span class="mark__line mark__line--doc" id="mark-doc">CPF</span>
+                  <span class="mark__line" id="mark-date"></span>
+                  <span class="mark__line" id="mark-reason" hidden></span>
+                  <span class="mark__line" id="mark-location" hidden></span>
+                </div>
+                <img src="/static/icon.png" alt="" class="mark__seal" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pager" id="pager" hidden>
+          <button type="button" id="prev-page" class="icon-btn" title="Página anterior" aria-label="Página anterior">‹</button>
+          <span class="pager__label"><b id="pager-num">1</b> de <span id="pager-total">1</span></span>
+          <button type="button" id="next-page" class="icon-btn" title="Próxima página" aria-label="Próxima página">›</button>
+        </div>
+      </main>
+
+      <aside class="panel">
+        <form id="form" novalidate>
+          <p class="guide" id="guide" data-state="pdf">Escolha o documento para começar.</p>
+
+          <section class="block" data-field="box">
+            <h2 class="block__title">Onde assinar</h2>
+            <p class="spot" id="spot" data-set="false">
+              <span id="spot-text">Clique na página para posicionar a assinatura.</span>
+            </p>
+            <button type="button" id="clear-selection" class="quiet-btn" disabled>Tirar do documento</button>
+            <p class="hint">Clique em outra página para assinar nela também.<br />Botão direito tira a assinatura da página.</p>
+          </section>
+
+          <section class="block" data-field="pfx">
+            <h2 class="block__title">Certificado</h2>
+            <div class="certs" id="cert-choices"></div>
+
+            <div id="cert-upload" hidden>
+              <input type="file" id="pfx" accept=".pfx,.p12" class="sr-only" />
+              <label for="pfx" class="pick" id="pfx-pick">
+                <span class="pick__text" id="pfx-name">Escolher arquivo .pfx ou .p12</span>
+              </label>
+              <div class="field" data-field="password">
+                <div class="password">
+                  <input type="password" id="password" autocomplete="off" spellcheck="false"
+                         placeholder="Senha do certificado" aria-label="Senha do certificado" />
+                  <button type="button" id="toggle-password" class="icon-btn" title="Mostrar senha" aria-label="Mostrar senha">ver</button>
+                </div>
+              </div>
+              <label class="check">
+                <input type="checkbox" id="remember" />
+                <span>Guardar no cofre<em>fica cifrado nesta máquina</em></span>
+              </label>
+            </div>
+          </section>
+
+          <section class="block">
+            <h2 class="block__title">No carimbo</h2>
+            <input type="text" id="reason" maxlength="120" placeholder="Motivo (opcional)" />
+            <input type="text" id="location" maxlength="120" placeholder="Local (opcional)" />
+            <label class="check" data-field="timestamp">
+              <input type="checkbox" id="timestamp" />
+              <span>Carimbo do tempo<em id="tsa-note">data certificada por uma autoridade externa</em></span>
+            </label>
+            <p class="warn" id="tsa-warn" hidden>
+              A autoridade configurada não vale na ICP-Brasil.
+              <b>Deixe desmarcado</b>, ou a assinatura pode ser recusada.
+              <button type="button" class="warn__more" id="tsa-more">Por quê?</button>
+            </p>
+          </section>
+
+          <div class="panel__foot">
+            <button type="submit" id="submit" class="seal-btn seal-btn--wide" disabled>
+              <span class="seal-btn__label">Assinar documento</span>
+            </button>
+            <p class="signed-note" id="signed-note" hidden>
+              Pronto. O que aparece na página é a assinatura de verdade.
+            </p>
+          </div>
+        </form>
+      </aside>
+
+      <!-- ════════ CERTIFICADOS ════════ -->
+      <section class="sheetview" id="view-certs" hidden>
+        <div class="sheetview__inner">
+          <header class="sheetview__head">
+            <h1>Certificados guardados</h1>
+            <p>
+              O arquivo e a senha ficam cifrados nesta máquina. Isso protege contra backup mal
+              guardado e olhar alheio no disco, mas não contra quem já está logado como você.
+            </p>
+          </header>
+
+          <ul class="certlist" id="certlist"></ul>
+
+          <form class="addcert" id="addcert">
+            <h2>Guardar outro</h2>
+            <input type="file" id="new-pfx" accept=".pfx,.p12" class="sr-only" />
+            <label for="new-pfx" class="pick" id="new-pfx-pick">
+              <span class="pick__text" id="new-pfx-name">Escolher arquivo .pfx ou .p12</span>
+            </label>
+            <div class="password">
+              <input type="password" id="new-password" autocomplete="off" spellcheck="false"
+                     placeholder="Senha do certificado" aria-label="Senha do certificado" />
+              <button type="button" id="new-toggle" class="icon-btn" aria-label="Mostrar senha">ver</button>
+            </div>
+            <button type="submit" class="seal-btn" id="add-cert-btn" disabled>Guardar certificado</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- ════════ VALIDAR ════════ -->
+      <section class="sheetview" id="view-validate" hidden>
+        <div class="sheetview__inner">
+          <header class="sheetview__head">
+            <h1>Validar assinaturas</h1>
+            <p>
+              Abre um PDF assinado e confere quem assinou, se o documento continua intacto e se
+              a assinatura tem valor na ICP-Brasil. Nada é enviado para fora.
+            </p>
+          </header>
+
+          <div class="dropbox" id="validate-drop">
+            <button type="button" class="seal-btn" id="pick-validate">Escolher PDF assinado</button>
+          </div>
+
+          <div id="validate-result"></div>
+        </div>
+      </section>
+    </div>
+
+    <dialog class="dialog" id="dialog">
+      <div class="dialog__body">
+        <h2 class="dialog__title" id="dialog-title"></h2>
+        <p class="dialog__text" id="dialog-text"></p>
+        <p class="dialog__note" id="dialog-note" hidden></p>
+        <div class="dialog__actions" id="dialog-actions"></div>
+      </div>
+    </dialog>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

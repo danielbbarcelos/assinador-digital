@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Assinador
+GenericName=Assinatura digital de PDF
+Comment=Assina PDF com certificado ICP-Brasil, sem que o documento saia da máquina
+Exec=@RUN_SH@
+Icon=assinador-digital
+Terminal=false
+Categories=Office;
+Keywords=assinatura;assinar;pdf;certificado;digital;icp;brasil;pades;a1;sign;
+StartupNotify=true
+StartupWMClass=assinador-digital

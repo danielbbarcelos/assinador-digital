@@ -1,0 +1,18 @@
+# Assinatura e criptografia
+# Sem os extras [opentype]/[image-support] de propósito: o carimbo usa Courier,
+# uma das 14 fontes-padrão do PDF (ver app/signing.py).
+pyHanko==0.37.0
+pyhanko-certvalidator==0.32.1
+cryptography==50.0.1
+
+# Servidor local
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+
+# Janela nativa (usa o PyGObject/WebKit do sistema — veja o README)
+pywebview==6.2.1
+
+# Testes
+pytest==9.1.1
+httpx==0.28.1
