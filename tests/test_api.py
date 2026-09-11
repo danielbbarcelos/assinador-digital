@@ -180,11 +180,13 @@ def test_guardar_com_senha_errada_devolve_o_erro_certo(client, pfx_bytes):
 
 
 def test_assina_com_certificado_do_cofre(client, pfx_bytes, pfx_password, pdf_bytes):
+    """Com a senha guardada, assinar não pede nada."""
     guardado = client.post(
         "/api/certificates",
         files={"pfx": ("cert.pfx", pfx_bytes, "application/x-pkcs12")},
-        data={"password": pfx_password.decode()},
+        data={"password": pfx_password.decode(), "store_password": "true"},
     ).json()
+    assert guardado["has_password"] is True
 
     # nem o arquivo nem a senha vão na requisição
     resposta = client.post(
@@ -194,6 +196,89 @@ def test_assina_com_certificado_do_cofre(client, pfx_bytes, pfx_password, pdf_by
     )
     assert resposta.status_code == 200
     assert resposta.content.startswith(b"%PDF-")
+
+
+def test_certificado_do_cofre_sem_senha_pede_a_senha(client, pfx_bytes, pfx_password, pdf_bytes):
+    guardado = client.post(
+        "/api/certificates",
+        files={"pfx": ("cert.pfx", pfx_bytes, "application/x-pkcs12")},
+        data={"password": pfx_password.decode()},
+    ).json()
+    assert guardado["has_password"] is False, "não guardar a senha é o padrão"
+
+    sem_senha = client.post(
+        "/api/sign",
+        files={"pdf": ("contrato.pdf", pdf_bytes, "application/pdf")},
+        data={"marks": MARCA, "certificate_id": guardado["id"]},
+    )
+    assert sem_senha.status_code == 400
+    assert sem_senha.json()["code"] == "PASSWORD_NEEDED"
+
+    com_senha = client.post(
+        "/api/sign",
+        files={"pdf": ("contrato.pdf", pdf_bytes, "application/pdf")},
+        data={
+            "marks": MARCA,
+            "certificate_id": guardado["id"],
+            "password": pfx_password.decode(),
+        },
+    )
+    assert com_senha.status_code == 200
+
+
+def test_assinar_guardando_a_senha_do_certificado_do_cofre(
+    client, pfx_bytes, pfx_password, pdf_bytes
+):
+    guardado = client.post(
+        "/api/certificates",
+        files={"pfx": ("cert.pfx", pfx_bytes, "application/x-pkcs12")},
+        data={"password": pfx_password.decode()},
+    ).json()
+
+    client.post(
+        "/api/sign",
+        files={"pdf": ("contrato.pdf", pdf_bytes, "application/pdf")},
+        data={
+            "marks": MARCA,
+            "certificate_id": guardado["id"],
+            "password": pfx_password.decode(),
+            "remember_password": "true",
+        },
+    )
+    depois = client.get("/api/certificates").json()[0]
+    assert depois["has_password"] is True
+
+
+def test_apaga_a_senha_guardada(client, pfx_bytes, pfx_password):
+    guardado = client.post(
+        "/api/certificates",
+        files={"pfx": ("cert.pfx", pfx_bytes, "application/x-pkcs12")},
+        data={"password": pfx_password.decode(), "store_password": "true"},
+    ).json()
+
+    resposta = client.delete(f"/api/certificates/{guardado['id']}/password")
+    assert resposta.status_code == 200
+    assert resposta.json()["has_password"] is False
+
+    # o certificado continua no cofre
+    assert len(client.get("/api/certificates").json()) == 1
+
+
+def test_guarda_a_senha_de_um_certificado_que_ja_estava_no_cofre(
+    client, pfx_bytes, pfx_password
+):
+    guardado = client.post(
+        "/api/certificates",
+        files={"pfx": ("cert.pfx", pfx_bytes, "application/x-pkcs12")},
+        data={"password": pfx_password.decode()},
+    ).json()
+
+    resposta = client.put(
+        f"/api/certificates/{guardado['id']}/password",
+        data={"password": pfx_password.decode()},
+    )
+    assert resposta.status_code == 200
+    assert resposta.json()["has_password"] is True
 
 
 def test_assinar_sem_certificado_nenhum(client, pdf_bytes):
@@ -217,12 +302,30 @@ def test_assinar_com_certificado_que_saiu_do_cofre(client, pdf_bytes):
 
 
 def test_assinar_guardando_o_certificado(client, pfx_bytes, pfx_password, pdf_bytes):
+    """Guarda o certificado, e a senha só se pedirem."""
     resposta = client.post(
         "/api/sign",
         **sign_request(pdf_bytes, pfx_bytes, pfx_password.decode(), remember="true"),
     )
     assert resposta.status_code == 200
-    assert len(client.get("/api/certificates").json()) == 1
+
+    (guardado,) = client.get("/api/certificates").json()
+    assert guardado["has_password"] is False
+
+
+def test_assinar_guardando_certificado_e_senha(client, pfx_bytes, pfx_password, pdf_bytes):
+    client.post(
+        "/api/sign",
+        **sign_request(
+            pdf_bytes,
+            pfx_bytes,
+            pfx_password.decode(),
+            remember="true",
+            remember_password="true",
+        ),
+    )
+    (guardado,) = client.get("/api/certificates").json()
+    assert guardado["has_password"] is True
 
 
 def test_assinar_sem_guardar_nao_deixa_rastro(client, pfx_bytes, pfx_password, pdf_bytes):

@@ -101,16 +101,9 @@
               <label for="pfx" class="pick" id="pfx-pick">
                 <span class="pick__text" id="pfx-name">Escolher arquivo .pfx ou .p12</span>
               </label>
-              <div class="field" data-field="password">
-                <div class="password">
-                  <input type="password" id="password" autocomplete="off" spellcheck="false"
-                         placeholder="Senha do certificado" aria-label="Senha do certificado" />
-                  <button type="button" id="toggle-password" class="icon-btn" title="Mostrar senha" aria-label="Mostrar senha">ver</button>
-                </div>
-              </div>
               <label class="check">
                 <input type="checkbox" id="remember" />
-                <span>Guardar no cofre<em>fica cifrado nesta máquina</em></span>
+                <span>Guardar no cofre<em>a senha é pedida na hora de assinar</em></span>
               </label>
             </div>
           </section>
@@ -165,6 +158,18 @@
                      placeholder="Senha do certificado" aria-label="Senha do certificado" />
               <button type="button" id="new-toggle" class="icon-btn" aria-label="Mostrar senha">ver</button>
             </div>
+            <p class="hint">A senha é usada para conferir o certificado. Ela só fica guardada se você pedir.</p>
+            <label class="check">
+              <input type="checkbox" id="new-store-password" />
+              <span>Guardar a senha também<em>o app deixa de perguntar a cada assinatura</em></span>
+            </label>
+            <p class="warn" id="new-risk" hidden>
+              Quem entrar na sua conta desta máquina poderá assinar no seu nome, sem digitar nada.
+              <label class="check check--inline">
+                <input type="checkbox" id="new-risk-ok" />
+                <span>Entendo o risco</span>
+              </label>
+            </p>
             <button type="submit" class="seal-btn" id="add-cert-btn" disabled>Guardar certificado</button>
           </form>
         </div>
@@ -191,12 +196,34 @@
     </div>
 
     <dialog class="dialog" id="dialog">
-      <div class="dialog__body">
+      <form method="dialog" class="dialog__body" id="dialog-body">
         <h2 class="dialog__title" id="dialog-title"></h2>
         <p class="dialog__text" id="dialog-text"></p>
+
+        <div class="dialog__form" id="dialog-form" hidden>
+          <div class="password">
+            <input type="password" id="dialog-password" autocomplete="off" spellcheck="false"
+                   placeholder="Senha do certificado" aria-label="Senha do certificado" />
+            <button type="button" id="dialog-password-toggle" class="icon-btn"
+                    aria-label="Mostrar senha">ver</button>
+          </div>
+          <label class="check" id="dialog-remember-wrap" hidden>
+            <input type="checkbox" id="dialog-remember" />
+            <span id="dialog-remember-label">Guardar a senha junto<em>fica cifrada nesta máquina, e o app deixa de perguntar</em></span>
+          </label>
+          <p class="warn" id="dialog-risk" hidden>
+            Quem entrar na sua conta desta máquina poderá assinar no seu nome, sem digitar nada.
+          </p>
+        </div>
+
+        <div class="working" id="dialog-working" hidden>
+          <span class="working__spin" aria-hidden="true"></span>
+          <span id="dialog-working-text">Assinando</span>
+        </div>
+
         <p class="dialog__note" id="dialog-note" hidden></p>
         <div class="dialog__actions" id="dialog-actions"></div>
-      </div>
+      </form>
     </dialog>
 
     <script type="module" src="/static/app.js"></script>

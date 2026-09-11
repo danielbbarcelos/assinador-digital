@@ -59,6 +59,7 @@ from app.errors import (
     InvalidCertificateError,
     InvalidPdfError,
     LegacyCryptoError,
+    NoInternetError,
     PageOutOfRangeError,
     TimestampError,
     WrongPasswordError,
@@ -389,15 +390,13 @@ def _seal_width(box: SignatureBox) -> float:
 
 
 class _StampBackground(PdfContent):
-    """A moldura do carimbo e a logo ao fundo.
+    """A logo ao fundo do carimbo, como marca d'água.
 
-    Desenhado à mão porque o `border_width` do pyHanko só sabe fazer retângulo
-    reto e contínuo. Aqui a borda é tracejada e de cantos arredondados, e a logo
-    do app entra como marca d'água — quase transparente, atrás do texto, sem
-    roubar largura de ninguém.
+    **Sem moldura.** O tracejado existe só na tela, para mostrar onde a
+    assinatura vai cair enquanto se escolhe o lugar. No documento ele viraria
+    uma caixa desenhada por cima do papel, e documento não tem caixa: tem
+    assinatura. O que fica aqui é a logo, quase transparente, atrás do texto.
     """
-
-    LINE = (0.42, 0.47, 0.53)  # cinza azulado, para não brigar com o texto
 
     def __init__(self, box: SignatureBox):
         largura = box.x2 - box.x1
@@ -414,20 +413,7 @@ class _StampBackground(PdfContent):
             self._logo.set_writer(writer)
 
     def render(self) -> bytes:
-        raio = min(6.0, self._w / 8, self._h / 4)
-        partes = [
-            b"q",
-            b"%.3f %.3f %.3f RG" % self.LINE,
-            b"0.7 w",
-            b"[2.6 2.2] 0 d",
-            _rounded_rect(0.4, 0.4, self._w - 0.8, self._h - 0.8, raio),
-            b"S",
-            b"Q",
-        ]
-        marca = self._render_logo()
-        if marca:
-            partes.append(marca)
-        return b"\n".join(partes)
+        return self._render_logo() or b""
 
     def _render_logo(self) -> bytes | None:
         """A logo encostada à direita, centrada na altura."""
@@ -464,22 +450,6 @@ def _load_logo(altura_caixa: float) -> PdfImage | None:
 
 #: Constante de Bézier para aproximar um quarto de círculo.
 _K = 0.5523
-
-
-def _rounded_rect(x: float, y: float, w: float, h: float, r: float) -> bytes:
-    """Caminho de um retângulo de cantos arredondados (sem traçar nem preencher)."""
-    k = r * _K
-    return b"\n".join([
-        b"%.2f %.2f m" % (x + r, y),
-        b"%.2f %.2f l" % (x + w - r, y),
-        b"%.2f %.2f %.2f %.2f %.2f %.2f c" % (x + w - r + k, y, x + w, y + r - k, x + w, y + r),
-        b"%.2f %.2f l" % (x + w, y + h - r),
-        b"%.2f %.2f %.2f %.2f %.2f %.2f c" % (x + w, y + h - r + k, x + w - r + k, y + h, x + w - r, y + h),
-        b"%.2f %.2f l" % (x + r, y + h),
-        b"%.2f %.2f %.2f %.2f %.2f %.2f c" % (x + r - k, y + h, x, y + h - r + k, x, y + h - r),
-        b"%.2f %.2f l" % (x, y + r),
-        b"%.2f %.2f %.2f %.2f %.2f %.2f c" % (x, y + r - k, x + r - k, y, x + r, y),
-    ])
 
 
 def _circle(cx: float, cy: float, r: float) -> bytes:
@@ -642,7 +612,33 @@ def probe_timestamper(timestamper: timestamps.TimeStamper) -> None:
         asyncio.run(timestamper.async_timestamp(dummy_digest("sha256"), "sha256"))
     except Exception as exc:
         logger.warning("TSA %s indisponível: %s", getattr(timestamper, "url", "?"), exc)
+        # máquina sem rede e autoridade fora do ar pedem respostas diferentes:
+        # uma é problema seu, a outra não
+        if _looks_offline(exc):
+            raise NoInternetError() from exc
         raise TimestampError() from exc
+
+
+#: Como o sistema operacional diz "não tem rede aqui".
+_OFFLINE_SIGNS = (
+    "temporary failure in name resolution",
+    "name or service not known",
+    "nodename nor servname",
+    "network is unreachable",
+    "no route to host",
+    "cannot connect to host",
+    "connection refused",
+    "getaddrinfo",
+)
+
+
+def _looks_offline(exc: Exception) -> bool:
+    """A falha foi por falta de rede, e não por culpa do outro lado?"""
+    texto = f"{type(exc).__name__}: {exc}".lower()
+    causa = getattr(exc, "__cause__", None)
+    if causa is not None:
+        texto += f" {type(causa).__name__}: {causa}".lower()
+    return any(sinal in texto for sinal in _OFFLINE_SIGNS)
 
 
 # ---------------------------------------------------------------------------
@@ -736,6 +732,8 @@ def _classify_signing_failure(exc: Exception, *, timestamped: bool):
         return exc
 
     # Carimbo do tempo: erro do protocolo TSA ou simplesmente rede.
+    if timestamped and _looks_offline(exc):
+        return NoInternetError()
     if isinstance(exc, timestamps.TimestampRequestError):
         return TimestampError()
     if timestamped and isinstance(exc, (asyncio.TimeoutError, OSError)):

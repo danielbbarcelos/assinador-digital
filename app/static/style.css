@@ -93,17 +93,23 @@
 
 * { box-sizing: border-box; }
 
+/* Um clarão discreto no alto, em cinza neutro. Fica na área de conteúdo, e não
+   no body, porque só assim as três telas mostram exatamente o mesmo fundo: no
+   body, a altura de rolagem de cada tela mudava onde o gradiente terminava. */
+.desk,
+.sheetview {
+  background: radial-gradient(120% 70% at 50% 0%, #24242b 0%, var(--bg) 70%);
+  background-repeat: no-repeat;
+  background-attachment: local;
+}
+
 /* O atributo hidden precisa vencer os display: flex/grid deste arquivo. */
 [hidden] { display: none !important; }
 
 html, body { height: 100%; margin: 0; }
 
 body {
-  /* Um clarão discreto no alto, em cinza neutro. Dá profundidade à mesa sem
-     puxar a tela para nenhuma cor, e vale para as três telas. */
-  background:
-    radial-gradient(130% 85% at 50% 0%, #23232a 0%, var(--bg) 58%)
-    fixed;
+  background: var(--bg);
   color: var(--fg);
   font: 400 14px/1.5 var(--sans);
   font-variant-numeric: tabular-nums;
@@ -1193,3 +1199,31 @@ input[type="password"]:focus {
   font-size: 12px;
   line-height: 1.45;
 }
+
+/* ── senha guardada, ou não ── */
+
+.certcard__pw {
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+.certcard__pw.is-stored { color: var(--warning); }
+
+.certcard__actions { display: flex; gap: var(--s-2); flex: none; }
+
+.check--inline {
+  display: inline-flex;
+  margin-top: var(--s-2);
+  font-size: 11.5px;
+  color: var(--fg);
+}
+
+.check--inline input { width: 14px; height: 14px; }
+.check--inline input:checked::after { margin: 0 0 0 4px; width: 3px; height: 7px; }
+
+/* ── o diálogo quando ele pergunta ── */
+
+.dialog__form { display: grid; gap: var(--s-3); }
+.dialog__form .password input { font-size: 14px; padding: 10px 46px 10px 12px; }
+.dialog__form .warn { margin-top: -2px; }
+.dialog__actions[hidden] { display: none !important; }

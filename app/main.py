@@ -33,6 +33,7 @@ from app.errors import (
     FileTooLargeError,
     NoCertificateError,
     NoMarksError,
+    PasswordNeededError,
     SigningError,
     TooManyMarksError,
     VazioError,
@@ -122,16 +123,42 @@ async def api_certificates() -> list[dict]:
 async def api_add_certificate(
     pfx: UploadFile = File(...),
     password: str = Form(...),
+    store_password: bool = Form(False),
 ) -> dict:
-    """Guarda um certificado — só entra no cofre se abrir com a senha."""
+    """Guarda um certificado. Só entra no cofre se abrir com a senha.
+
+    `store_password` decide se a senha fica junto. Sem ela, o app pergunta a
+    cada assinatura e a senha nunca toca o disco.
+    """
     senha = bytearray(password.encode("utf-8"))
     try:
         pfx_bytes = await _read_upload(pfx, MAX_PFX_MB, "pfx")
-        guardado = await run_in_threadpool(vault.add, pfx_bytes, bytes(senha))
+        guardado = await run_in_threadpool(
+            vault.add, pfx_bytes, bytes(senha), store_password
+        )
     finally:
         for i in range(len(senha)):
             senha[i] = 0
         await pfx.close()
+    return guardado.as_public()
+
+
+@app.put("/api/certificates/{cert_id}/password")
+async def api_store_password(cert_id: str, password: str = Form(...)) -> dict:
+    """Passa a guardar a senha de um certificado que já está no cofre."""
+    senha = bytearray(password.encode("utf-8"))
+    try:
+        guardado = await run_in_threadpool(vault.set_password, cert_id, bytes(senha))
+    finally:
+        for i in range(len(senha)):
+            senha[i] = 0
+    return guardado.as_public()
+
+
+@app.delete("/api/certificates/{cert_id}/password")
+async def api_forget_password(cert_id: str) -> dict:
+    """Esquece a senha e mantém o certificado."""
+    guardado = await run_in_threadpool(vault.forget_password, cert_id)
     return guardado.as_public()
 
 
@@ -190,6 +217,7 @@ async def api_sign(
     password: str = Form(""),
     certificate_id: str = Form(""),
     remember: bool = Form(False),
+    remember_password: bool = Form(False),
     reason: str = Form(""),
     location: str = Form(""),
     timestamp: bool = Form(False),
@@ -212,16 +240,24 @@ async def api_sign(
         pdf_bytes = await _read_upload(pdf, MAX_PDF_MB, "pdf")
 
         if certificate_id:
-            # certificado do cofre: nem o arquivo nem a senha passam pela rede
+            # certificado do cofre: o arquivo não passa pela rede, e a senha só
+            # passa quando não está guardada
             guardado = await run_in_threadpool(vault.get, certificate_id)
             pfx_bytes = guardado.pfx
-            senha = bytearray(guardado.password.encode("utf-8"))
+            if guardado.has_password:
+                senha = bytearray(guardado.password.encode("utf-8"))
+            elif not senha:
+                raise PasswordNeededError()
+            elif remember_password:
+                await run_in_threadpool(vault.set_password, certificate_id, bytes(senha))
         else:
             if pfx is None:
                 raise NoCertificateError()
             pfx_bytes = await _read_upload(pfx, MAX_PFX_MB, "pfx")
             if remember:
-                await run_in_threadpool(vault.add, pfx_bytes, bytes(senha))
+                await run_in_threadpool(
+                    vault.add, pfx_bytes, bytes(senha), remember_password
+                )
 
         pedidos = [
             SignatureRequest(

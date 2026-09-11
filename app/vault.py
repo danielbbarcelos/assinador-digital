@@ -70,7 +70,12 @@ def default_vault_dir() -> Path:
 
 @dataclass(frozen=True)
 class StoredCertificate:
-    """Um certificado guardado. `pfx` e `password` só saem para assinar."""
+    """Um certificado guardado. `pfx` e `password` só saem para assinar.
+
+    A senha é opcional. Guardar só o arquivo é o caminho seguro: o app pede a
+    senha a cada assinatura e ela nunca fica em disco. Guardar a senha junto
+    troca isso por comodidade, e quem escolhe é o usuário, avisado.
+    """
 
     id: str
     holder: str
@@ -78,11 +83,15 @@ class StoredCertificate:
     not_after: datetime
     added_at: datetime
     pfx: bytes
-    password: str
+    password: str | None
 
     @property
     def expired(self) -> bool:
         return datetime.now(timezone.utc) > self.not_after
+
+    @property
+    def has_password(self) -> bool:
+        return self.password is not None
 
     def as_public(self) -> dict[str, object]:
         """O que a interface pode ver: nada que identifique por inteiro."""
@@ -93,6 +102,7 @@ class StoredCertificate:
             "valid_until": self.not_after.date().isoformat(),
             "expired": self.expired,
             "added_at": self.added_at.date().isoformat(),
+            "has_password": self.has_password,
         }
 
 
@@ -147,8 +157,15 @@ class CertificateVault:
                 return _from_record(registro)
         raise CertificateNotFound()
 
-    def add(self, pfx_bytes: bytes, password: bytes) -> StoredCertificate:
-        """Guarda um certificado — validando antes que ele abre com a senha."""
+    def add(
+        self, pfx_bytes: bytes, password: bytes, store_password: bool = True
+    ) -> StoredCertificate:
+        """Guarda um certificado, validando antes que ele abre com a senha.
+
+        A senha é sempre exigida aqui, porque sem ela não dá para saber de quem
+        é o certificado nem até quando ele vale. `store_password=False` usa a
+        senha para conferir e não a escreve em lugar nenhum.
+        """
         signer = load_pkcs12_signer(pfx_bytes, password)
         cert = signer.signing_cert
         validade = cert["tbs_certificate"]["validity"]["not_after"].native
@@ -161,7 +178,7 @@ class CertificateVault:
             "not_after": validade.isoformat(),
             "added_at": datetime.now(timezone.utc).isoformat(),
             "pfx": b64encode(pfx_bytes).decode("ascii"),
-            "password": password.decode("utf-8"),
+            "password": password.decode("utf-8") if store_password else None,
         }
 
         # mesmo titular e mesma validade: é o mesmo certificado, atualiza
@@ -173,6 +190,30 @@ class CertificateVault:
         registros.append(novo)
         self._write(registros)
         return _from_record(novo)
+
+    def set_password(self, cert_id: str, password: bytes) -> StoredCertificate:
+        """Passa a guardar a senha de um certificado que já está no cofre."""
+        registros = self._read()
+        for registro in registros:
+            if registro["id"] != cert_id:
+                continue
+            # a senha só entra se realmente abrir este certificado
+            load_pkcs12_signer(b64decode(registro["pfx"]), password)
+            registro["password"] = password.decode("utf-8")
+            self._write(registros)
+            return _from_record(registro)
+        raise CertificateNotFound()
+
+    def forget_password(self, cert_id: str) -> StoredCertificate:
+        """Esquece a senha e mantém o certificado."""
+        registros = self._read()
+        for registro in registros:
+            if registro["id"] != cert_id:
+                continue
+            registro["password"] = None
+            self._write(registros)
+            return _from_record(registro)
+        raise CertificateNotFound()
 
     def delete(self, cert_id: str) -> None:
         registros = self._read()
@@ -190,5 +231,5 @@ def _from_record(registro: dict) -> StoredCertificate:
         not_after=datetime.fromisoformat(registro["not_after"]),
         added_at=datetime.fromisoformat(registro["added_at"]),
         pfx=b64decode(registro["pfx"]),
-        password=registro["password"],
+        password=registro.get("password"),
     )

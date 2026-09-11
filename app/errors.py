@@ -61,6 +61,23 @@ class NoCertificateError(SigningError):
     field = "pfx"
 
 
+class PasswordNeededError(SigningError):
+    code = "PASSWORD_NEEDED"
+    message = "Digite a senha do certificado."
+    field = "password"
+
+
+class NoInternetError(SigningError):
+    code = "NO_INTERNET"
+    message = (
+        "Sem conexão com a internet. O carimbo do tempo precisa falar com uma "
+        "autoridade externa. Assine sem carimbo, ou tente de novo quando a "
+        "conexão voltar."
+    )
+    http_status = 503
+    field = "timestamp"
+
+
 class CertificateExpiredError(SigningError):
     code = "CERT_EXPIRED"
     field = "pfx"

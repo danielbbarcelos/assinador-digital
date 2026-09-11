@@ -12,15 +12,21 @@ acontecem quando *você* liga o carimbo do tempo.
 
 Abra o PDF, clique onde a assinatura entra, escolha o certificado. A marca
 mostra a prévia do carimbo antes de assinar, e clicar em outra página assina
-nela também.
+nela também. A senha é pedida no fim, na hora de assinar, e não fica num campo
+aberto na tela enquanto você trabalha.
 
 ![assinar](docs/assinar.gif)
 
 ## Guardar certificados
 
-O `.pfx` e a senha podem ficar guardados, cifrados nesta máquina, para não
-reescolher arquivo e redigitar senha a cada documento. A lista mostra só o
-primeiro nome, três dígitos do CPF e a validade.
+O `.pfx` pode ficar guardado, cifrado nesta máquina, para não reescolher o
+arquivo a cada documento. **A senha é separada**: por padrão ela não é
+guardada, e o app pergunta na hora de assinar. Guardar a senha junto é uma
+escolha à parte, que pede confirmação do risco, e dá para apagá-la depois sem
+perder o certificado.
+
+A lista mostra só o primeiro nome, três dígitos do CPF, a validade e se a senha
+está guardada.
 
 ![certificados](docs/certificados.gif)
 
@@ -145,6 +151,9 @@ rm temp.pem          # o .pem intermediário contém a chave privada SEM senha
   contra backup mal guardado e olhar alheio no disco, não contra quem já está
   logado como você. Para esse nível existe o A3 em token, que é o próximo
   passo.
+- **A senha não é guardada por padrão.** Guardá-la é opt-in, com o risco dito
+  em português na própria tela: quem entrar na sua conta desta máquina passa a
+  poder assinar no seu nome sem digitar nada.
 - A interface recebe sempre dados mascarados: nome completo, CPF inteiro,
   arquivo e senha nunca chegam ao navegador.
 - Upload limitado a 50 MB para PDF e 5 MB para certificado. O PDF é validado

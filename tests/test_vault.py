@@ -34,7 +34,7 @@ def test_o_que_vai_para_a_tela_e_mascarado(vault, pfx_bytes, pfx_password):
     assert "456" not in publico["document"]
     assert publico["expired"] is False
     assert set(publico) == {
-        "id", "holder", "document", "valid_until", "expired", "added_at"
+        "id", "holder", "document", "valid_until", "expired", "added_at", "has_password"
     }, "nem o .pfx nem a senha saem daqui"
 
 
@@ -119,3 +119,53 @@ def test_mascara_do_nome(entrada, esperado):
 )
 def test_mascara_do_documento(entrada, esperado):
     assert _mask_document(entrada) == esperado
+
+
+# --- senha guardada, ou não -------------------------------------------------
+
+
+def test_guardar_sem_a_senha(vault, pfx_bytes, pfx_password):
+    """O caminho seguro: o certificado fica, a senha não."""
+    guardado = vault.add(pfx_bytes, pfx_password, store_password=False)
+
+    assert guardado.has_password is False
+    assert guardado.password is None
+    assert vault.get(guardado.id).pfx == pfx_bytes, "o certificado em si continua lá"
+    assert pfx_password not in vault.blob.read_bytes()
+
+
+def test_senha_errada_tambem_barra_quando_nao_vai_ser_guardada(vault, pfx_bytes):
+    """A senha serve para conferir o certificado, mesmo que não seja guardada."""
+    with pytest.raises(errors.WrongPasswordError):
+        vault.add(pfx_bytes, b"nao-e-essa", store_password=False)
+
+
+def test_guardar_a_senha_depois(vault, pfx_bytes, pfx_password):
+    guardado = vault.add(pfx_bytes, pfx_password, store_password=False)
+    atualizado = vault.set_password(guardado.id, pfx_password)
+
+    assert atualizado.has_password is True
+    assert vault.get(guardado.id).password == pfx_password.decode()
+
+
+def test_senha_errada_nao_substitui_a_guardada(vault, pfx_bytes, pfx_password):
+    guardado = vault.add(pfx_bytes, pfx_password)
+    with pytest.raises(errors.WrongPasswordError):
+        vault.set_password(guardado.id, b"chute")
+    assert vault.get(guardado.id).password == pfx_password.decode()
+
+
+def test_apagar_a_senha_mantem_o_certificado(vault, pfx_bytes, pfx_password):
+    guardado = vault.add(pfx_bytes, pfx_password)
+    assert guardado.has_password is True
+
+    depois = vault.forget_password(guardado.id)
+    assert depois.has_password is False
+    assert vault.get(guardado.id).pfx == pfx_bytes
+    assert pfx_password not in vault.blob.read_bytes()
+
+
+def test_apagar_senha_de_quem_nao_existe(vault):
+    with pytest.raises(errors.SigningError) as exc:
+        vault.forget_password("nao-existe")
+    assert exc.value.code == "CERT_NOT_FOUND"

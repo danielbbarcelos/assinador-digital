@@ -67,8 +67,6 @@ const el = {
   pfx: $("pfx"),
   pfxPick: $("pfx-pick"),
   pfxName: $("pfx-name"),
-  password: $("password"),
-  togglePassword: $("toggle-password"),
   remember: $("remember"),
   reason: $("reason"),
   location: $("location"),
@@ -92,10 +90,23 @@ const el = {
   validateResult: $("validate-result"),
   // diálogo
   dialog: $("dialog"),
+  dialogBody: $("dialog-body"),
   dialogTitle: $("dialog-title"),
   dialogText: $("dialog-text"),
   dialogNote: $("dialog-note"),
   dialogActions: $("dialog-actions"),
+  dialogForm: $("dialog-form"),
+  dialogPassword: $("dialog-password"),
+  dialogPasswordToggle: $("dialog-password-toggle"),
+  dialogRememberWrap: $("dialog-remember-wrap"),
+  dialogRemember: $("dialog-remember"),
+  dialogRisk: $("dialog-risk"),
+  dialogWorking: $("dialog-working"),
+  dialogWorkingText: $("dialog-working-text"),
+  // cadastro de certificado
+  newStorePassword: $("new-store-password"),
+  newRisk: $("new-risk"),
+  newRiskOk: $("new-risk-ok"),
 };
 
 const state = {
@@ -132,20 +143,47 @@ const state = {
  * @param {{title:string, text:string, note?:string, kind?:string,
  *          actions:{label:string, style?:string, onClick?:Function}[]}} opcoes
  */
-function showDialog({ title, text, note, kind = "", actions = [], working = false }) {
+function showDialog({
+  title,
+  text,
+  note,
+  kind = "",
+  actions = [],
+  working = false,
+  workingText = "",
+  form = null,
+}) {
   el.dialog.className = `dialog ${kind ? `dialog--${kind}` : ""}`.trim();
-  el.dialog.classList.toggle("dialog--working", working);
   el.dialogTitle.textContent = title;
-  el.dialogText.textContent = text;
+  el.dialogText.textContent = text || "";
+  el.dialogText.hidden = !text;
   el.dialogNote.hidden = !note;
   el.dialogNote.textContent = note || "";
 
+  // formulário de senha, quando o diálogo é quem pergunta
+  el.dialogForm.hidden = !form;
+  if (form) {
+    el.dialogPassword.value = "";
+    el.dialogPassword.type = "password";
+    el.dialogPasswordToggle.textContent = "ver";
+    el.dialogRememberWrap.hidden = !form.offerRemember;
+    el.dialogRemember.checked = false;
+    el.dialogRisk.hidden = true;
+  }
+
+  // progresso: some tudo que se clica, fica só o que se lê
+  el.dialogWorking.hidden = !working;
+  el.dialogWorkingText.textContent = workingText || "Assinando";
+
   el.dialogActions.innerHTML = "";
+  el.dialogActions.hidden = actions.length === 0;
   for (const acao of actions) {
     const botao = document.createElement("button");
     botao.type = "button";
     botao.className = acao.style === "primary" ? "seal-btn" : "quiet-btn";
     botao.textContent = acao.label;
+    botao.disabled = Boolean(acao.disabled);
+    if (acao.id) botao.id = acao.id;
     botao.addEventListener("click", async () => {
       if (acao.keepOpen !== true) el.dialog.close();
       await acao.onClick?.();
@@ -153,6 +191,73 @@ function showDialog({ title, text, note, kind = "", actions = [], working = fals
     el.dialogActions.appendChild(botao);
   }
   if (!el.dialog.open) el.dialog.showModal();
+  if (form) setTimeout(() => el.dialogPassword.focus(), 60);
+}
+
+/** Troca o conteúdo do diálogo aberto por um estado de trabalho. */
+function dialogWorking(title, texto) {
+  showDialog({ kind: "done", title, working: true, workingText: texto, actions: [] });
+}
+
+el.dialogPasswordToggle.addEventListener("click", () =>
+  togglePassword(el.dialogPassword, el.dialogPasswordToggle),
+);
+
+// guardar a senha é uma escolha com consequência, e ela aparece ao marcar
+el.dialogRemember.addEventListener("change", () => {
+  el.dialogRisk.hidden = !el.dialogRemember.checked;
+});
+
+/**
+ * Pergunta a senha do certificado no meio da tela, não na barra lateral.
+ *
+ * Resolve com `{ senha, guardar }`, ou com `null` se a pessoa desistir. O
+ * diálogo continua aberto: quem chama troca o conteúdo por um progresso, e a
+ * transição fica contínua.
+ */
+function askPassword({ titulo, texto, offerRemember }) {
+  return new Promise((resolve) => {
+    let respondido = false;
+    const responder = (valor) => {
+      if (respondido) return;
+      respondido = true;
+      resolve(valor);
+    };
+
+    showDialog({
+      title: titulo,
+      text: texto,
+      form: { offerRemember },
+      actions: [
+        { label: "Cancelar", onClick: () => responder(null) },
+        {
+          label: "Assinar",
+          style: "primary",
+          keepOpen: true,
+          id: "dialog-confirm",
+          onClick: () => {
+            if (!el.dialogPassword.value) {
+              el.dialogPassword.focus();
+              return;
+            }
+            responder({
+              senha: el.dialogPassword.value,
+              guardar: el.dialogRemember.checked,
+            });
+          },
+        },
+      ],
+    });
+
+    // Enter confirma, Esc desiste
+    el.dialogPassword.onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        $("dialog-confirm")?.click();
+      }
+    };
+    el.dialog.addEventListener("close", () => responder(null), { once: true });
+  });
 }
 
 function showError(payload) {
@@ -167,7 +272,7 @@ function showError(payload) {
     note: payload.detail || payload.code,
     actions: [{ label: "Entendi", style: "primary" }],
   });
-  if (payload.field === "password") el.password.focus();
+
 }
 
 // ---------------------------------------------------------------------------
@@ -714,7 +819,13 @@ function renderCertChoices() {
 
   for (const cert of validos) {
     el.certChoices.appendChild(
-      certOption(cert.id, cert.holder, `${cert.document || "sem CPF"} · vence ${formatDate(cert.valid_until)}`),
+      certOption(
+        cert.id,
+        cert.holder,
+        `${cert.document || "sem CPF"} · ${
+          cert.has_password ? "senha guardada" : "pede a senha"
+        }`,
+      ),
     );
   }
   el.certChoices.appendChild(
@@ -749,7 +860,7 @@ function certOption(valor, titulo, meta) {
   return label;
 }
 
-/** A lista da tela "Certificados", com o que cada um é e o botão de excluir. */
+/** A lista da tela "Certificados": o que cada um é, e o que dá para fazer. */
 function renderCertList() {
   el.certlist.innerHTML = "";
   if (!state.certificates.length) {
@@ -769,22 +880,58 @@ function renderCertList() {
         <span class="certcard__meta">${escapeHtml(cert.document || "sem CPF")} · ${
           cert.expired ? "venceu" : "vence"
         } <b>${formatDate(cert.valid_until)}</b></span>
+        <span class="certcard__pw ${cert.has_password ? "is-stored" : ""}">${
+          cert.has_password ? "senha guardada" : "pede a senha ao assinar"
+        }</span>
       </div>`;
+
+    const acoes = document.createElement("div");
+    acoes.className = "certcard__actions";
+
+    if (cert.has_password) {
+      const esquecer = document.createElement("button");
+      esquecer.type = "button";
+      esquecer.className = "quiet-btn";
+      esquecer.textContent = "Apagar senha";
+      esquecer.addEventListener("click", () => confirmForgetPassword(cert));
+      acoes.appendChild(esquecer);
+    }
 
     const excluir = document.createElement("button");
     excluir.type = "button";
     excluir.className = "danger-btn";
     excluir.textContent = "Excluir";
     excluir.addEventListener("click", () => confirmDelete(cert));
-    li.appendChild(excluir);
+    acoes.appendChild(excluir);
+
+    li.appendChild(acoes);
     el.certlist.appendChild(li);
   }
 }
 
+function confirmForgetPassword(cert) {
+  showDialog({
+    title: "Apagar a senha guardada",
+    text: `O certificado de ${cert.holder} continua no cofre. A senha some desta máquina, e o app volta a pedi-la a cada assinatura.`,
+    actions: [
+      { label: "Deixar como está" },
+      {
+        label: "Apagar senha",
+        style: "primary",
+        onClick: async () => {
+          await fetch(`/api/certificates/${cert.id}/password`, { method: "DELETE" });
+          await loadCertificates();
+        },
+      },
+    ],
+  });
+}
+
 function confirmDelete(cert) {
   showDialog({
+    kind: "error",
     title: "Excluir certificado",
-    text: `${cert.holder} sai do cofre desta máquina. O arquivo original continua onde você guardou.`,
+    text: `${cert.holder} sai do cofre desta máquina, com a senha se houver. O arquivo original continua onde você guardou, e dá para cadastrar de novo depois.`,
     actions: [
       { label: "Cancelar" },
       {
@@ -813,13 +960,6 @@ el.pfx.addEventListener("change", () => {
   updateSubmitState();
 });
 
-el.password.addEventListener("input", () => {
-  clearFieldError("password");
-  updateSubmitState();
-});
-
-el.togglePassword.addEventListener("click", () => togglePassword(el.password, el.togglePassword));
-
 function togglePassword(input, botao) {
   const vendo = input.type === "text";
   input.type = vendo ? "password" : "text";
@@ -832,12 +972,25 @@ el.newPfx.addEventListener("change", () => {
   const file = el.newPfx.files[0];
   el.newPfxName.textContent = file ? file.name : "Escolher arquivo .pfx ou .p12";
   el.newPfxPick.classList.toggle("is-set", Boolean(file));
-  el.addCertBtn.disabled = !(file && el.newPassword.value);
+  updateAddCertState();
 });
 
-el.newPassword.addEventListener("input", () => {
-  el.addCertBtn.disabled = !(el.newPfx.files[0] && el.newPassword.value);
-});
+el.newPassword.addEventListener("input", updateAddCertState);
+el.newStorePassword.addEventListener("change", updateAddCertState);
+el.newRiskOk.addEventListener("change", updateAddCertState);
+
+/** Guardar a senha exige marcar que entendeu o que isso significa. */
+function updateAddCertState() {
+  const guardarSenha = el.newStorePassword.checked;
+  el.newRisk.hidden = !guardarSenha;
+  if (!guardarSenha) el.newRiskOk.checked = false;
+
+  const pronto =
+    Boolean(el.newPfx.files[0]) &&
+    Boolean(el.newPassword.value) &&
+    (!guardarSenha || el.newRiskOk.checked);
+  el.addCertBtn.disabled = !pronto;
+}
 
 el.newToggle.addEventListener("click", () => togglePassword(el.newPassword, el.newToggle));
 
@@ -846,6 +999,7 @@ el.addcert.addEventListener("submit", async (e) => {
   const dados = new FormData();
   dados.append("pfx", el.newPfx.files[0]);
   dados.append("password", el.newPassword.value);
+  dados.append("store_password", el.newStorePassword.checked ? "true" : "false");
 
   el.addCertBtn.disabled = true;
   try {
@@ -859,15 +1013,20 @@ el.addcert.addEventListener("submit", async (e) => {
     el.newPfx.value = "";
     el.newPfxName.textContent = "Escolher arquivo .pfx ou .p12";
     el.newPfxPick.classList.remove("is-set");
+    el.newStorePassword.checked = false;
+    el.newRiskOk.checked = false;
+    el.newRisk.hidden = true;
     await loadCertificates();
     showDialog({
       kind: "done",
       title: "Certificado guardado",
-      text: `${corpo.holder} já aparece na hora de assinar.`,
+      text: corpo.has_password
+        ? `${corpo.holder} já aparece na hora de assinar, com a senha junto.`
+        : `${corpo.holder} já aparece na hora de assinar. A senha é pedida na hora.`,
       actions: [{ label: "Pronto", style: "primary" }],
     });
   } finally {
-    el.addCertBtn.disabled = !(el.newPfx.files[0] && el.newPassword.value);
+    updateAddCertState();
   }
 });
 
@@ -899,7 +1058,7 @@ function updateSubmitState() {
   const temPdf = Boolean(state.file);
   const temMarca = state.marks.length > 0;
   const usandoCofre = state.chosenCert && state.chosenCert !== "upload";
-  const temCert = usandoCofre || (el.pfx.files[0] && el.password.value.length > 0);
+  const temCert = usandoCofre || Boolean(el.pfx.files[0]);
   const pronto = temPdf && temMarca && temCert;
 
   setPanelEnabled(temPdf);
@@ -947,7 +1106,34 @@ el.form.addEventListener("submit", async (e) => {
     return;
   }
 
+  const guardado = state.certificates.find((c) => c.id === state.chosenCert);
+  const novoArquivo = !guardado;
+
+  // A senha é pedida aqui, no meio da tela, e só quando falta: certificado
+  // guardado com senha vai direto para o trabalho.
+  let senha = null;
+  let guardarSenha = false;
+
+  if (novoArquivo || !guardado.has_password) {
+    const resposta = await askPassword({
+      titulo: "Senha do certificado",
+      texto: novoArquivo
+        ? el.pfx.files[0]?.name || "Digite a senha para assinar."
+        : `${guardado.holder}. Digite a senha para assinar.`,
+      // guardar a senha só faz sentido se o certificado vai ficar no cofre
+      offerRemember: novoArquivo ? el.remember.checked : true,
+    });
+    if (resposta === null) return;
+    senha = resposta.senha;
+    guardarSenha = resposta.guardar;
+  }
+
+  dialogWorking(
+    state.marks.length > 1 ? `Assinando ${state.marks.length} páginas` : "Assinando",
+    "Isso leva alguns segundos.",
+  );
   setBusy(true);
+
   const dados = new FormData();
   dados.append("pdf", state.file);
   // uma entrada por página marcada; o servidor assina uma sobre a outra
@@ -963,12 +1149,13 @@ el.form.addEventListener("submit", async (e) => {
   dados.append("reason", el.reason.value);
   dados.append("location", el.location.value);
   dados.append("timestamp", el.timestamp.checked ? "true" : "false");
+  if (senha !== null) dados.append("password", senha);
+  dados.append("remember_password", guardarSenha ? "true" : "false");
 
-  if (state.chosenCert && state.chosenCert !== "upload") {
+  if (!novoArquivo) {
     dados.append("certificate_id", state.chosenCert);
   } else {
     dados.append("pfx", el.pfx.files[0]);
-    dados.append("password", el.password.value);
     dados.append("remember", el.remember.checked ? "true" : "false");
   }
 
@@ -982,8 +1169,8 @@ el.form.addEventListener("submit", async (e) => {
       showError(payload);
       return;
     }
-    if (el.remember.checked) await loadCertificates();
-    signedReady(await resposta.blob(), resposta.headers);
+    if (el.remember.checked || guardarSenha) await loadCertificates();
+    await signedReady(await resposta.blob(), resposta.headers);
   } catch (err) {
     showError({
       title: "Servidor local não respondeu",
@@ -991,6 +1178,7 @@ el.form.addEventListener("submit", async (e) => {
       detail: describe(err),
     });
   } finally {
+    senha = null;
     setBusy(false);
   }
 });
