@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -38,6 +37,7 @@ from app.errors import (
     TooManyMarksError,
     VazioError,
 )
+from app.platform_support import downloads_dir, open_path
 from app.validation import validate_pdf_bytes
 from app.vault import CertificateVault
 from app.signing import (
@@ -68,18 +68,7 @@ MAX_MARKS = 20
 vault = CertificateVault()
 
 
-def downloads_dir() -> Path:
-    """A pasta de downloads do usuário, que é onde o navegador salva."""
-    try:
-        saida = subprocess.run(
-            ["xdg-user-dir", "DOWNLOAD"], capture_output=True, text=True, timeout=3
-        )
-        caminho = Path(saida.stdout.strip())
-        if caminho.is_dir():
-            return caminho
-    except Exception:  # pragma: no cover - xdg-user-dir pode não existir
-        pass
-    return Path.home() / "Downloads"
+
 
 app = FastAPI(
     title="Assinador local",
@@ -186,12 +175,7 @@ async def api_reveal(filename: str = Form(...), what: str = Form("folder")) -> d
         return {"opened": False, "reason": "not_found", "folder": str(pasta)}
 
     caminho = alvo if what == "file" else alvo.parent
-    subprocess.Popen(
-        ["xdg-open", str(caminho)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    open_path(caminho)
     return {"opened": True, "path": str(caminho)}
 
 

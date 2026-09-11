@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Instala o Assinador no ambiente de desktop do usuário (sem sudo):
+# Instala o Assinador no ambiente de desktop do usuário, sem sudo.
 #
+# Linux:
 #   * ícone em ~/.local/share/icons/hicolor/<tamanho>/apps/
-#   * lançador em ~/.local/share/applications/  (aparece no menu do GNOME)
+#   * lançador em ~/.local/share/applications/ (aparece no menu)
 #   * comando `assinador-digital` em ~/bin/
+#
+# macOS:
+#   * Assinador.app em ~/Applications, que aparece no Launchpad e no Spotlight
+#   * comando `assinador-digital` em ~/bin/
+#
+# No Windows, use install.ps1.
 #
 # Nada é copiado para fora daqui: o lançador aponta para o run.sh deste
 # diretório, então `git pull` já atualiza o app instalado.
@@ -16,7 +23,64 @@ APP_ID="assinador-digital"
 ICONE="app/static/icon.png"
 TAMANHOS=(16 24 32 48 64 128 256 512)
 
-echo "Instalando a partir de $RAIZ"
+SISTEMA="$(uname -s)"
+echo "Instalando a partir de $RAIZ ($SISTEMA)"
+
+# ─────────────────────────── macOS ───────────────────────────
+if [ "$SISTEMA" = "Darwin" ]; then
+  APP="$HOME/Applications/Assinador.app"
+  echo "→ $APP"
+  mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+  cat > "$APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Assinador</string>
+  <key>CFBundleDisplayName</key><string>Assinador</string>
+  <key>CFBundleIdentifier</key><string>com.assinador.digital</string>
+  <key>CFBundleVersion</key><string>1.0</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleExecutable</key><string>assinador</string>
+  <key>CFBundleIconFile</key><string>assinador.icns</string>
+  <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+PLIST
+
+  cat > "$APP/Contents/MacOS/assinador" <<LAUNCHER
+#!/usr/bin/env bash
+exec "$RAIZ/run.sh"
+LAUNCHER
+  chmod +x "$APP/Contents/MacOS/assinador"
+
+  # ícone: .icns quando houver o conversor do sistema, senão o PNG mesmo
+  if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+    TEMP="$(mktemp -d)/assinador.iconset"
+    mkdir -p "$TEMP"
+    for T in 16 32 64 128 256 512; do
+      sips -z $T $T "$ICONE" --out "$TEMP/icon_${T}x${T}.png" >/dev/null 2>&1 || true
+    done
+    iconutil -c icns "$TEMP" -o "$APP/Contents/Resources/assinador.icns" 2>/dev/null || \
+      cp "$ICONE" "$APP/Contents/Resources/assinador.png"
+  else
+    cp "$ICONE" "$APP/Contents/Resources/assinador.png"
+  fi
+
+  mkdir -p "$HOME/bin"
+  cat > "$HOME/bin/$APP_ID" <<EOF
+#!/usr/bin/env bash
+exec "$RAIZ/run.sh" "\$@"
+EOF
+  chmod +x "$HOME/bin/$APP_ID"
+
+  echo
+  echo "Pronto. O Assinador está no Launchpad, e o comando é: $APP_ID"
+  exit 0
+fi
+
+# ─────────────────────────── Linux ───────────────────────────
 
 # --- ícone ------------------------------------------------------------------
 if [ ! -f "$ICONE" ]; then

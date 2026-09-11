@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import sys
 
 import pytest
 
@@ -48,6 +49,10 @@ def test_o_arquivo_em_disco_nao_tem_nada_legivel(vault, pfx_bytes, pfx_password)
     assert bruto.startswith(b"gAAAAA"), "Fernet"
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="no Windows o acesso é por ACL, e um chmod do Python não muda nada",
+)
 def test_permissoes_do_cofre(vault, pfx_bytes, pfx_password):
     vault.add(pfx_bytes, pfx_password)
     assert oct(vault.keyfile.stat().st_mode)[-3:] == "600"

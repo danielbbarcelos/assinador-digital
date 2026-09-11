@@ -39,32 +39,55 @@ cadeia fecha numa AC da ICP-Brasil e o que cada assinatura cobre. Roda offline.
 
 ## Instalação
 
-Requisitos: Ubuntu e Python 3.11 ou mais novo.
+Requisitos: Python 3.11 ou mais novo. Funciona em **Linux, macOS e Windows**.
 
 ```bash
 git clone https://github.com/danielbbarcelos/assinador-digital.git
 cd assinador-digital
+```
+
+### Linux e macOS
+
+```bash
 ./run.sh
 ```
 
-O `run.sh` cria o ambiente virtual na primeira execução (com `uv` se estiver
-instalado, senão `venv`), instala as dependências e abre o app.
+### Windows
 
-### Instalar no menu de aplicativos
-
-```bash
-./install.sh
+```powershell
+powershell -ExecutionPolicy Bypass -File run.ps1
 ```
 
-Coloca o ícone, cria o lançador no menu e o comando `assinador` no terminal.
-Não usa `sudo` e não copia nada para fora do repositório: o lançador aponta
-para o `run.sh` daqui, então `git pull` já atualiza o app instalado.
+Ou clique duas vezes em `run.cmd`.
 
-### Janela nativa
+Em qualquer um deles, a primeira execução cria o ambiente virtual (com `uv` se
+estiver instalado, senão `venv`), instala as dependências e abre o app.
 
-A interface abre numa janela própria (pywebview + WebKit). Na maioria dos
-Ubuntu Desktop isso funciona sem instalar nada. O app escolhe sozinho, nesta
-ordem:
+### Colocar no menu de aplicativos
+
+```bash
+./install.sh                                              # Linux e macOS
+powershell -ExecutionPolicy Bypass -File install.ps1      # Windows
+```
+
+No Linux, cria o ícone, o lançador no menu e o comando `assinador-digital`. No
+macOS, monta um `Assinador.app` em `~/Applications`, que aparece no Launchpad e
+no Spotlight. No Windows, cria o atalho no Menu Iniciar.
+
+Nenhum deles usa `sudo` nem copia nada para fora do repositório: o lançador
+aponta para o `run` daqui, então `git pull` já atualiza o app instalado.
+
+### A janela
+
+A interface abre numa janela própria, e o motor é o do sistema:
+
+| Sistema | Motor | O que precisa instalar |
+|---|---|---|
+| macOS | WKWebView | nada, vem com o sistema |
+| Windows | WebView2 | nada, acompanha o Edge desde o Windows 10 |
+| Linux | WebKitGTK | o binding `gir1.2-webkit2-4.1`, que a maioria já tem |
+
+O Linux é o único com pegadinha. O app escolhe sozinho, nesta ordem:
 
 1. **GTK/WebKit** do sistema, se o binding for 4.1 ou mais novo;
 2. **Qt**, se estiver instalado (`pip install pywebview[qt] qtpy PyQt6-WebEngine`),
@@ -72,12 +95,33 @@ ordem:
 3. **navegador padrão**, que sempre funciona.
 
 Só cai para o passo 3 quem não tiver nenhum dos dois. O caso típico é máquina
-que veio de upgrade do 22.04 e ficou com o WebKit2 4.0, de 2022. A correção é
-um pacote:
+que veio de upgrade do Ubuntu 22.04 e ficou com o WebKit2 4.0, de 2022. A
+correção é um pacote:
 
 ```bash
 sudo apt install gir1.2-webkit2-4.1
 ```
+
+### Onde ficam as coisas
+
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| Cofre de certificados | `~/.config/assinador-digital` | `~/Library/Application Support/Assinador` | `%APPDATA%\Assinador` |
+| Proteção do cofre | modo `600` | modo `600` | herda a pasta do perfil |
+
+No Windows não existe equivalente direto ao modo `600`, e um `chmod` do Python
+não muda a ACL. O conteúdo continua cifrado, mas a camada de permissão do
+sistema de arquivos é a do seu perfil de usuário, e não uma restrição própria.
+
+### A fonte do carimbo
+
+O app procura, entre as fontes instaladas, uma com `unitsPerEm` igual a 1000, e
+o critério não é estético: o pyHanko escreve os avanços de glifo assumindo essa
+métrica, e fonte com 2048, que é quase toda TrueType, sai com as letras
+espaçadas. As candidatas são a Nimbus Sans no Linux, a Helvetica no macOS e a
+Arial no Windows. Nenhuma servindo, o carimbo usa Courier, que é uma das 14
+fontes-padrão do PDF, existe em qualquer leitor e não depende de nada
+instalado.
 
 ## Cadeia da ICP-Brasil
 
@@ -207,6 +251,22 @@ estética: o pyHanko escreve os avanços de glifo assumindo 1000 unidades por em
 então fonte com `unitsPerEm` 2048, que é quase toda TrueType, sai com as letras
 espaçadas. Sem ela, o carimbo cai para Courier, que é base-14 e não depende de
 fonte instalada.
+
+## O que foi testado onde
+
+Tudo neste repositório foi exercitado em **Linux (Ubuntu 24.04)**: a suíte de
+testes, a assinatura com certificado ICP-Brasil real e a janela nativa.
+
+O suporte a **macOS e Windows** está escrito e isolado num módulo só
+(`app/platform_support.py`), com testes para as partes que dá para testar em
+qualquer sistema, mas **não foi executado nessas plataformas**. O que pode
+precisar de ajuste na primeira execução:
+
+- o `Assinador.app` do macOS, que é montado à mão pelo `install.sh`;
+- a conversão de ícone do `install.ps1`, que depende do .NET presente;
+- a pasta de downloads no Windows, lida do registro.
+
+Se rodar em algum dos dois, abra uma issue com o que aconteceu.
 
 ## Próximos passos
 

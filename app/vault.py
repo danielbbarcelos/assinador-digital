@@ -21,7 +21,6 @@ nome, três primeiros dígitos do CPF, validade.
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from base64 import b64decode, b64encode
 from dataclasses import dataclass
@@ -33,6 +32,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.errors import SigningError
 from app.masking import mask_document as _mask_document
 from app.masking import mask_name as _mask_name
+from app.platform_support import config_dir, protect
 from app.signing import (
     certificate_common_name,
     certificate_document_id,
@@ -59,9 +59,8 @@ LEGACY_DIR_NAME = "sign-manager"
 
 
 def default_vault_dir() -> Path:
-    base = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
-    atual = base / "assinador-digital"
-    antigo = base / LEGACY_DIR_NAME
+    atual = config_dir()
+    antigo = atual.parent / LEGACY_DIR_NAME
     if not atual.exists() and antigo.is_dir():
         atual.parent.mkdir(parents=True, exist_ok=True)
         antigo.rename(atual)
@@ -117,10 +116,11 @@ class CertificateVault:
     # --- chave -------------------------------------------------------------
 
     def _fernet(self) -> Fernet:
-        self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        protect(self.dir, directory=True)
         if not self.keyfile.exists():
             self.keyfile.write_bytes(Fernet.generate_key())
-            self.keyfile.chmod(0o600)
+            protect(self.keyfile)
         return Fernet(self.keyfile.read_bytes())
 
     # --- leitura e escrita do blob ----------------------------------------
@@ -138,12 +138,13 @@ class CertificateVault:
         return json.loads(dados)
 
     def _write(self, registros: list[dict]) -> None:
-        self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        protect(self.dir, directory=True)
         cifrado = self._fernet().encrypt(json.dumps(registros).encode("utf-8"))
         # escreve e troca, para não deixar o cofre pela metade se faltar luz
         temp = self.blob.with_suffix(".tmp")
         temp.write_bytes(cifrado)
-        temp.chmod(0o600)
+        protect(temp)
         temp.replace(self.blob)
 
     # --- operações ---------------------------------------------------------

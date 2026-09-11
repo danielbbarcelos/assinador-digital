@@ -50,6 +50,7 @@ from pyhanko.sign.fields import SigFieldSpec, SigSeedSubFilter, enumerate_sig_fi
 from pyhanko.stamp import TextStampStyle
 from pyhanko_certvalidator import ValidationContext
 
+from app.platform_support import stamp_font
 from app.errors import (
     CertificateExpiredError,
     CertificateNotYetValidError,
@@ -317,16 +318,9 @@ def _unique_field_name(writer: IncrementalPdfFileWriter) -> str:
 STAMP_FONT_SIZE_MAX = 11
 STAMP_FONT_SIZE_MIN = 5
 
-#: Nimbus Sans (URW): desenho da Helvetica, vem no Ubuntu com o pacote
-#: fonts-urw-base35, dependência do ghostscript.
-#:
-#: A escolha não é só estética. O pyHanko 0.37 escreve os avanços de glifo
-#: assumindo 1000 unidades por em; fonte com `unitsPerEm` 2048 — DejaVu,
-#: Liberation, Carlito, quase toda TrueType — sai com as letras espaçadas, como
-#: se o texto tivesse sido tracking-ado. As URW usam 1000 e saem certas.
-#: Sem ela, cai para Courier, uma das 14 fontes-padrão do PDF: monoespaçada,
-#: mas sempre presente e sem depender de fonte instalada.
-STAMP_FONT = Path("/usr/share/fonts/opentype/urw-base35/NimbusSans-Regular.otf")
+#: A fonte do carimbo, escolhida entre as instaladas no sistema. Qual é e por
+#: que o critério é o `unitsPerEm`: ver `platform_support.stamp_font`.
+STAMP_FONT = stamp_font()
 
 #: Largura média do caractere, em fração do corpo da fonte. Na Helvetica o
 #: texto corrido fica perto de 0.5; no Courier, que é monoespaçado, é exatamente
@@ -348,7 +342,7 @@ STAMP_PADDING_Y = 6
 
 def _stamp_font():
     """A fonte do carimbo e a largura média que ela implica."""
-    if STAMP_FONT.exists():
+    if STAMP_FONT is not None and STAMP_FONT.exists():
         return GlyphAccumulatorFactory, CHAR_WIDTH_SANS
     return None, CHAR_WIDTH_COURIER
 
