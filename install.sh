@@ -3,7 +3,7 @@
 #
 #   * ícone em ~/.local/share/icons/hicolor/<tamanho>/apps/
 #   * lançador em ~/.local/share/applications/  (aparece no menu do GNOME)
-#   * comando `sign-manager` em ~/bin/
+#   * comando `assinador-digital` em ~/bin/
 #
 # Nada é copiado para fora daqui: o lançador aponta para o run.sh deste
 # diretório, então `git pull` já atualiza o app instalado.
@@ -61,7 +61,7 @@ sed "s|@RUN_SH@|$RAIZ/run.sh|" packaging/$APP_ID.desktop > "$APPS/$APP_ID.deskto
 chmod +x "$APPS/$APP_ID.desktop"
 
 # --- comando de terminal ----------------------------------------------------
-echo "→ comando sign-manager"
+echo "→ comando $APP_ID"
 mkdir -p "$HOME/bin"
 cat > "$HOME/bin/$APP_ID" <<EOF
 #!/usr/bin/env bash
@@ -76,7 +76,7 @@ command -v gtk-update-icon-cache >/dev/null && \
   gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 
 echo
-echo "Pronto. O Assinador está no menu de aplicativos, e o comando é: sign-manager"
+echo "Pronto. O Assinador está no menu de aplicativos, e o comando é: $APP_ID"
 
 # --- o que ainda depende de sudo -------------------------------------------
 if ! python3 -c "
